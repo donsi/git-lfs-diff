@@ -1,0 +1,57 @@
+#!/bin/bash
+
+#------------------------------------------------------------------------------
+# As git-lfs is primarily intended for storing binary files, it does not support
+# the diff operation. However, for cases when git-lfs is being used for large 
+# text files, a diff operation would be useful...
+#
+# This script performs a diff operation between 2 specified revisions of a file
+# stored in git-lfs.
+#
+# This script originates from the comment made by Taylor Blau in:
+# https://github.com/git-lfs/git-lfs/issues/2498
+#
+#------------------------------------------------------------------------------
+usage() {
+   cmd=$(basename $0)
+   echo "Usage: $cmd revision1 revision2 filename" 1>&2
+   exit 1
+}
+
+oid_to_path() {
+   local oid="$1"
+   local dir="$(git lfs env | grep LocalMediaDir | cut -d '=' -f 2)"
+
+   echo "$dir/${oid:0:2}/${oid:2:2}/$oid"
+}
+
+get_diff_cmd() {
+   if diff -U 3 --color "$0" "$0" &> /dev/null; then
+      echo "diff -U 3 --color"
+   elif diff -U 3 "$0" "$0" &> /dev/null; then
+      echo "diff -U 3"
+   elif diff -- "$0" "$0" &> /dev/null; then
+      echo "diff --"
+   else
+      echo "diff"
+   fi
+}
+
+if [ "$#" -ne 3 ]
+then
+   echo "ERROR: expected 3 arguments." 1>&2
+   usage
+fi
+
+rev1="$(git rev-parse "$1")"
+rev2="$(git rev-parse "$2")"
+fname="$3"
+
+oid1="$(git cat-file -p "$rev1":"$fname" | grep oid | cut -d ':' -f 2)"
+oid2="$(git cat-file -p "$rev2":"$fname" | grep oid | cut -d ':' -f 2)"
+
+path1="$(oid_to_path "$oid1")"
+path2="$(oid_to_path "$oid2")"
+
+diff=$(get_diff_cmd)
+$diff "$path1" "$path2"
